@@ -1,12 +1,22 @@
 import math
 import time
 import multiprocessing as mul
+from multiprocessing import Manager
 import csv
 
 class onedocument:
     def __init__(self,document,length):
         self.document=document;
         self.length=length;
+
+class simMatrix:
+    manager=Manager()
+    sim=manager.list()
+    @staticmethod
+    def init_sim(doc_len):
+        if len(simMatrix.sim) == 0:
+            simMatrix.sim=simMatrix.manager.list([([0] * doc_len) for i in range(doc_len)])
+
 
 class tfidf:
     def __init__(self):
@@ -75,50 +85,37 @@ class tfidf:
     def calsims(self):
         print('cal sims')
         doc_len=len(self.docs)
+        print("doc len: ",doc_len)
         self.doc_len=doc_len
         self.nplusone=doc_len+1
         self.ln_lplusone=self.lntf[self.nplusone]
         self.avdl=self.totalword/doc_len
-        print("avdl is :%s" % self.avdl)
-        self.sim= [([0] * doc_len) for i in range(doc_len)]
-        pool=mul.Pool(8)
+        print("avdl : %s" % self.avdl)
+        # simMatrix.sim= [([0] * doc_len) for i in range(doc_len)]
+        # simMatrix.sim= [([0] * doc_len) for i in range(doc_len)]
+        simMatrix.init_sim(doc_len)
+        pool_num=4
+        print("proceses : %s" % pool_num)
+        pool=mul.Pool(pool_num)
         pool.map_async(self.cal_i_with_others,range(0,doc_len))
-        # for i in range(0,doc_len):
-        #     len_i=self.docs[i].length
-        #     denominator=(1-0.2)+0.2*len_i/self.avdl
-        #     for j in range(i+1,doc_len):
-        #         len_j=self.docs[j].length
-                # print("i :%s.j:%s, len i: %d ,len j :%d" % (i,j,len_i,len_j))
-
-            # use multiprocessing
-            #
-            #     if(len_i>len_j):
-            #         pool.apply_async(self.cal_sim_i_j,(i,j,denominator,self.docs[j].document,self.docs[i].document,))
-            #     else:
-            #         pool.apply_async(self.cal_sim_i_j,(i,j,denominator,self.docs[i].document,self.docs[j].document,))
-
-                # if(len_i>len_j):
-                #     self.sim[i][j]=self.cal_two_document(denominator,self.docs[j].document,self.docs[i].document)
-                # else:
-                #     self.sim[i][j]=self.cal_two_document(denominator,self.docs[i].document,self.docs[j].document)
         pool.close()
         pool.join()
 
     def cal_i_with_others(self,i):
         len_i=self.docs[i].length
         denominator=(1-0.2)+0.2*len_i/self.avdl
+        cur_list=[]
+        for j in range(0,i+1):
+            cur_list.append(0)
         for j in range(i+1,self.doc_len):
             len_j=self.docs[j].length
             if(len_i>len_j):
-                    self.sim[i][j]=self.cal_two_document(denominator,self.docs[j].document,self.docs[i].document)
+                cur_list.append(self.cal_two_document(denominator,self.docs[j].document,self.docs[i].document))
+                    # simMatrix.sim[i][j]=self.cal_two_document(denominator,self.docs[j].document,self.docs[i].document)
             else:
-                    self.sim[i][j]=self.cal_two_document(denominator,self.docs[i].document,self.docs[j].document)
-            # print("i :%s.j:%s, len i: %d ,len j :%d sim: %d" % (i,j,len_i,len_j,self.sim[i][j]))
-
-
-    def cal_sim_i_j(self,i,j,denominator,doci,docj):
-        self.sim[i][j]=self.cal_two_document(denominator,doci,docj)
-        print("i:%d ,j:%d ,sim :%s " % (i,j,self.sim[i][j]))
+                cur_list.append(self.cal_two_document(denominator,self.docs[i].document,self.docs[j].document))
+                    # simMatrix.sim[i][j]=self.cal_two_document(denominator,self.docs[i].document,self.docs[j].document)
+        simMatrix.sim[i]=cur_list
 
     def cal_two_document(self,denominator,doca,docb):
         sim=0
@@ -141,11 +138,11 @@ class calc:
         a.calsims()
         fout=open("result.csv","w",newline="")
         writer=csv.writer(fout)
-        writer.writerows(a.sim)
+        writer.writerows(simMatrix.sim)
         fout.close()
         stop_time=time.time();
-        print("calculation time %s" % (stop_time-mid_time))
-        print("total time:%s" % (stop_time-start_time))
+        print("calculation time: %s" % (stop_time-mid_time))
+        print("total time: %s" % (stop_time-start_time))
 
 
 calc.calc_time()
